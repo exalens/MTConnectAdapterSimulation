@@ -1,7 +1,7 @@
 # MTConnect Adapter Simulator
 # A simple OPC-UA MTConnect Adapter simulator for testing Process Endpoint Monitoring
 
-The process simulates an mtconnect adapter. It provides an interface to interact with the parameters and supports external communication through a TCP server. The MTConnect Adapter's behavior, represented by variables, can be dynamically updated via OPC UA clients or external systems.
+The process simulates an MTConnect Adapter. It provides an interface to interact with the parameters and supports external communication through a TCP server. The MTConnect Adapter's behavior, represented by variables, can be dynamically updated via OPC UA clients or external systems.
 
 # To activate the OPC-UA MTConnect Adapter Simulator process ensure all Python requirements are installed, and run:
 
