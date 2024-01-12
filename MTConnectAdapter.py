@@ -3,7 +3,7 @@ import traceback
 from threading import Thread
 import logging
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 import inquirer
 import numpy as np
@@ -30,7 +30,9 @@ AnomalyType = [
     'Correlation: Value increased slower than expected during transition',
     'Correlation: Value increased faster than expected during transition',
     'Correlation: Value decreased slower than expected during transition',
-    'Correlation: Value decreased faster than expected during transition'
+    'Correlation: Value decreased faster than expected during transition',
+    # 'Anomalous sequence of state readings',
+    'Anomalous sequence of value readings'
 ]
 
 
@@ -189,7 +191,7 @@ class CNCServer:
         general_data = {
             "line_number": 0,
             "deceleration": 10000,
-            ""
+            "continuous_seq": 0,
             "rapid_override": 0,
             "feedrate_override": 1000,
             "rotary_velocity_override": None,
@@ -311,6 +313,9 @@ class CNCServer:
 
                 self.shdr_data["general"]["line_number"] += 2
                 self.shdr_data["general"]["deceleration"] -= 2
+                if self.shdr_data["general"]["continuous_seq"] >= 100:
+                    self.shdr_data["general"]["continuous_seq"] = 0
+                self.shdr_data["general"]["continuous_seq"] += 2
 
                 # Simulate changes in the CNC machine's rotary_mode for C_axis based on the current scenario and
                 # elapsed time
@@ -484,7 +489,9 @@ class CNCServer:
                 selected_variable),
             16: lambda: self.handle_correlated_value_decreased_slower_than_expected_during_transition(
                 selected_variable),
-            17: lambda: self.handle_correlated_value_decreased_faster_than_expected_during_transition(selected_variable)
+            17: lambda: self.handle_correlated_value_decreased_faster_than_expected_during_transition(
+                selected_variable),
+            18: lambda: self.handle_abnormal_sequence_of_value_changes()
         }
 
         handler = anomaly_handlers.get(selected_anomaly_type_index)
@@ -891,6 +898,19 @@ class CNCServer:
         self._sleep(2)
         self.updated_data["execution"] = next_state
 
+    def handle_abnormal_sequence_of_value_changes(self):
+        self._anomaly_flag = True
+        self.updated_data["continuous_seq"] = 0
+        val_list = list(range(1, 101))
+        for i in range(100):
+            self.updated_data["continuous_seq"] = val_list[i]
+            self._sleep(2)
+        # for i in range(10):
+        #     self.updated_data["continuous_seq"] = val_list[10 - i]
+        #     self._sleep(2)
+
+        self._anomaly_flag = False
+
     def get_human_readable_timestamp(self) -> str:
         """Return the current timestamp in a human-readable format with milliseconds."""
         current_timestamp = datetime.now()
@@ -967,6 +987,7 @@ class CNCServer:
 
         for conn, addr in self.clients:
             try:
+                self.server_logger.debug(shdr_string.encode('utf-8'))
                 conn.sendall(shdr_string.encode('utf-8'))
             except (BrokenPipeError, ConnectionResetError, socket.error) as e:
                 self.server_logger.error(f"Tried to send data to client {addr}: \
@@ -984,10 +1005,9 @@ class CNCServer:
     def handle_client(self) -> None:
         try:
             while self.running:
-                s_str = datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]
+                s_str = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ')[:-3]
                 if self.send_all_data:
                     shdr_string = s_str + '|' + self.format_shdr_data(self.shdr_data) + '\n'
-                    self.server_logger.info(f"{shdr_string}")
                     self.send_data_to_clients(shdr_string)
                     time.sleep(self.simulation_interval)
 
